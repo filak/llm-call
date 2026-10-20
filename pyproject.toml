@@ -1,6 +1,6 @@
 [project]
 name = "llm-call"
-version = "0.5.0"
+version = "0.6.0"
 description = "A compact API wrapper and CLI for calling a LLM model provider."
 requires-python = ">=3.12"
 dependencies = [

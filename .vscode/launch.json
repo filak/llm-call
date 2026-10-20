@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug cli.py",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "llm_call.cli",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src",
+            },
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "gemini",
+                //"--help",
+                "--file=_testing/unit-001.html",
+                "--payload=_testing/payload_wp.json",
+                "--response=json",
+                "--output=_testing/unit-001_cleaned.html.json"
+            ]
+        }
+    ]
+}

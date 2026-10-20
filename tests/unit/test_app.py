@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import httpx
 import pytest
 from google.genai import types
 from google.genai.errors import APIError
@@ -197,6 +198,36 @@ def test_call_wraps_api_errors(generate_content):
     generate_content.side_effect = APIError(500, {"message": "failed"})
     with pytest.raises(RuntimeError, match="Gemini API Error"):
         client.call("hello", response_format="json")
+
+
+def test_call_wraps_connection_error(generate_content):
+    generate_content.side_effect = httpx.ConnectError("certificate verify failed")
+    with pytest.raises(RuntimeError, match="Gemini connection error"):
+        client.call("hello")
+
+
+def test_call_passes_timeout_in_milliseconds(generate_content):
+    client.call("hello", timeout=2.5)
+    config = generate_content.call_args.kwargs["config"]
+    assert config.http_options.timeout == 2500
+    assert config.system_instruction is None
+
+
+def test_call_without_timeout_sends_no_config(generate_content):
+    client.call("hello")
+    assert generate_content.call_args.kwargs["config"] is None
+
+
+def test_call_rejects_invalid_timeout_before_request(generate_content):
+    with pytest.raises(ValueError, match="timeout"):
+        client.call("hello", timeout=0)
+    generate_content.assert_not_called()
+
+
+def test_call_wraps_timeout_error(generate_content):
+    generate_content.side_effect = httpx.ReadTimeout("timed out")
+    with pytest.raises(RuntimeError, match="timed out after 5 s"):
+        client.call("hello", timeout=5)
 
 
 def test_cli_json_is_one_document(monkeypatch, capsys):

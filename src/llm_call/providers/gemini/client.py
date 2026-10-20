@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Sequence, TypedDict
 
+import httpx
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
@@ -40,17 +41,30 @@ def call(
     system: Optional[str] = None,
     include_file_name: bool = False,
     response_format: Literal["text", "json"] = "text",
+    timeout: Optional[float] = None,
 ) -> str | CallResponse:
-    """Return text with usage first, or a JSON-serializable response envelope."""
+    """Return text with usage first, or a JSON-serializable response envelope.
+
+    timeout is the request timeout in seconds. None means no client timeout.
+    """
     if response_format not in ("text", "json"):
         raise ValueError("response_format must be 'text' or 'json'")
+    if timeout is not None and timeout <= 0:
+        raise ValueError("timeout must be a positive number of seconds")
     contents = [
         prompt,
         *load_parts(list(files or []), include_file_name=include_file_name),
     ]
     config = None
-    if system:
-        config = types.GenerateContentConfig(system_instruction=system)
+    if system or timeout is not None:
+        config = types.GenerateContentConfig(
+            system_instruction=system or None,
+            http_options=(
+                types.HttpOptions(timeout=int(timeout * 1000))
+                if timeout is not None
+                else None
+            ),
+        )
 
     try:
         response = get_client().models.generate_content(
@@ -60,6 +74,10 @@ def call(
         )
     except APIError as exc:
         raise RuntimeError(f"Gemini API Error: {exc}") from exc
+    except httpx.TimeoutException as exc:
+        raise RuntimeError(f"Gemini request timed out after {timeout} s") from exc
+    except httpx.TransportError as exc:
+        raise RuntimeError(f"Gemini connection error: {exc}") from exc
 
     metadata = response.usage_metadata
     usage = TokenUsage(
