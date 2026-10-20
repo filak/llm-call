@@ -1,0 +1,29 @@
+[project]
+name = "llm-call"
+version = "0.5.0"
+description = "A compact API wrapper and CLI for calling a LLM model provider."
+requires-python = ">=3.12"
+dependencies = [
+    "google-genai>=0.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.11.0",
+    "flake8>=7.4.0",
+    "pip-audit>=2.9.0",
+    "pytest>=9.0.0",
+]
+
+[project.scripts]
+llm-call = "llm_call.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+link-mode = "copy"
+
+[tool.black]
+target-version = ["py312"]

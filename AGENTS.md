@@ -1,0 +1,180 @@
+# llm-call - agent contributor instructions
+
+## Purpose and document hierarchy
+
+This file defines how contributors and coding agents change this repository. It is
+the top-level project instruction file. The files in `specs` define the product
+and its approved implementation constraints.
+
+Use this top-down authority structure:
+
+1. `AGENTS.md` defines the change process, repository policy, and quality rules.
+2. `README.md` defines user facing documentation.
+
+A specialized specification can add detail within its ownership boundary. It
+must not override a higher-level document or a sibling specification. Report a
+conflict before making a material change.
+
+## General rules
+
+- Use only technologies approved by the specification that owns the affected
+  component.
+- Do not replace or extend the approved stack without explicit user approval.
+- Do not add a production dependency without explicit user approval.
+- Use versions defined in `pyproject.toml` and `uv.lock`.
+- Prefer a simple design to an unnecessary abstraction.
+- Record durable architectural decisions in project documentation, not only in chat history.
+
+## Command execution
+
+- Use `uv run --locked <tool> ...` consistently for development tools.
+- Execute each verification command as a separate tool invocation.
+- Avoid combining tests, linting, Git inspection, and searches into one
+  PowerShell script.
+- Avoid explicit nested `pwsh.exe -Command` wrappers where the execution
+  tool can run the command directly.
+- Use the tool's working-directory parameter instead of prepending `cd`.
+- Use `rg` for searches and `Get-Content` for reading files.
+- Do not modify Codex rule files unless explicitly requested.
+- When approval is needed, prefer an existing reusable command prefix
+  over proposing approval for a whole script.
+
+## Agent resource and token discipline
+
+This section limits token usage and tool execution.
+
+### Context minimization
+
+- Read at most 5 files before acting. Read more only when the task requires it.
+- Do not run `rg` without a path filter for initial exploration. Use `specs/PROJECT.md` and this file for project structure.
+- Do not read `uv.lock`, build output, `.venv/`, `dist/`, or Docker volumes.
+- Do not re-read a file already read in this session.
+
+### Execution limits
+
+- Keep tool calls small and focused. Do not combine verification, linting, and Git inspection in one call.
+- Limit exploration to 15 tool invocations. If the task is not clear after 15 invocations, stop and report findings.
+- Run only relevant tests: `uv run --locked pytest tests/unit/<affected_module>`. Do not run full test suite unless the task requires it.
+- Run one verification command per invocation: Black, then Flake8, then pytest. Do not batch them.
+- If a command fails twice with the same error, stop and report. Do not loop.
+
+### Chat efficiency
+
+- Use Ask mode before Agent mode. Escalate to Agent mode only when Ask mode cannot complete the task.
+- Start a new chat for a new task. Do not reuse long chat history.
+- Prefer `#file` or file path reference to `@workspace`.
+- Autocomplete is disabled by user preference. Do not attempt to enable inline suggestions. Act only when invoked via chat or explicit command.
+
+## Dependency management
+
+- `uv`
+- `uv_build`
+- `pyproject.toml`
+- `uv.lock`
+- Use `uv` for dependency management and virtual environments.
+- Define dependencies in `pyproject.toml`.
+- Commit `uv.lock`.
+- Do not use `pip` directly for normal project dependency management.
+- Do not create or maintain `requirements.txt` unless deployment requires it.
+- Keep development dependencies separate from production dependencies.
+
+Use the versions defined in `pyproject.toml` and `uv.lock`.
+
+## Runtime and deployment context
+
+- Use Python 3.12.
+- Support Microsoft Windows for development.
+- Support Microsoft Windows Server for native production deployment.
+- Support container deployment on Docker-capable hosts, including Linux.
+- Use Docker Desktop with the WSL 2 backend and Docker Compose for local
+  development infrastructure.
+- Run application and background-worker processes on the Windows host during
+  initial development.
+- Keep each development computer's Docker environment and data independent.
+- Use a reverse proxy for public routing and TLS.
+- Do not require Docker Desktop in production.
+
+## Logging context
+
+- Use the Python standard `logging` package.
+- Write operational logs to standard output and standard error.
+- Let container infrastructure collect standard output and standard error.
+- Include timestamps, severity, and process names.
+- Include request or job correlation identifiers when available.
+- Do not log credentials, session identifiers, uploaded document contents, or
+  complete LLM payloads.
+
+Console logging is always available. Debug mode can
+add a separate debug log. Log records include component, client address, and
+correlation identifier fields when available.
+
+## Python conventions and quality checks
+
+- Format Python with Black.
+- Check Python with Flake8.
+- Use `pytest` for automated testing.
+- Use `pip-audit` for dependency vulnerability checks.
+- Add type annotations to new public functions.
+- Prefer `pathlib.Path` to `os.path`.
+- Use application factories where practical.
+- Keep route handlers small.
+- Put business logic in service modules.
+- Keep database access outside templates and presentation code.
+- Preserve the background-processing boundary in `specs/PROJECT.md`.
+- Use `tests/unit` for tests without external services.
+- Use `tests/conftest.py` for shared pytest fixtures.
+
+## Security rules
+
+- Apply component-specific security requirements from the applicable
+  specification.
+- Never commit or disclose a secret.
+
+## Technical writing
+
+Use Simplified Technical English style for documentation, interface text, and operating instructions.
+
+- Use short, direct sentences.
+- Use active voice where possible.
+- Give one instruction in each sentence.
+- Give one topic in each paragraph.
+- Use the same term for the same concept.
+- Avoid idioms, slang, metaphors, and ambiguous pronouns.
+- Put conditions before actions.
+- Preserve exact identifiers, commands, API names, and error messages.
+- Describe text as `STE-style` unless formal ASD-STE100 compliance was verified.
+
+## Agent response style
+
+- Keep final reports under 10 lines.
+- List changed files, verification result, and important decisions.
+- Do not paste full file contents. Refer to file path and line number.
+- Do not repeat product scope or configuration that is already in `specs/`.
+- Preserve exact identifiers and commands.
+
+## Repository policy
+
+- Commit source code, documentation, `pyproject.toml`, `uv.lock`, Compose configuration, and safe example configuration.
+- Do not commit secrets, `.env`, local databases, Docker volumes, uploaded images, logs, build output, or production credentials.
+- Keep development credentials separate from production credentials.
+- Do not put real credentials in `compose.yaml` or committed files.
+- Commit `.env.example` with safe placeholders.
+
+## Verification
+
+After an implementation change:
+
+1. Format Python with Black.
+2. Run Flake8.
+3. Run the relevant automated tests when they exist.
+4. Report checks that could not run.
+5. Summarize changed files and important decisions.
+
+## Change control
+
+- Before implementing a new feature or a substantial codebase change, assess the need, scope, and tradeoffs. Challenge unnecessary complexity. Suggest a simpler solution when practical.
+- Make the smallest change that completes the task.
+- Preserve existing public interfaces unless the task requires a change.
+- Do not resolve an open architectural decision without user approval.
+- Do not create commits, tags, releases, deployments, or pushes unless requested.
+- Never discard uncommitted user changes to complete a Git operation.
