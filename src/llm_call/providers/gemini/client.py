@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional, Sequence, TypedDict
+from typing import Literal, Optional, Sequence
 
 import httpx
 from google import genai
@@ -8,23 +8,18 @@ from google.genai import types
 from google.genai.errors import APIError
 
 from .config import get_api_key, get_model
+from ..response import (
+    CallResponse,
+    TokenUsage,
+    build_response,
+    sum_counts,
+    validate_options,
+)
 from ...files import load_parts
 
+__all__ = ["CallResponse", "TokenUsage", "call", "get_client"]
+
 _client: Optional[genai.Client] = None
-
-
-class TokenUsage(TypedDict):
-    prompt_token_count: Optional[int]
-    candidates_token_count: Optional[int]
-    total_token_count: Optional[int]
-    thoughts_token_count: Optional[int]
-    cached_content_token_count: Optional[int]
-    tool_use_prompt_token_count: Optional[int]
-
-
-class CallResponse(TypedDict):
-    response: str
-    usage: TokenUsage
 
 
 def get_client() -> genai.Client:
@@ -42,29 +37,26 @@ def call(
     include_file_name: bool = False,
     response_format: Literal["text", "json"] = "text",
     timeout: Optional[float] = None,
+    temperature: float = 0.0,
 ) -> str | CallResponse:
     """Return text with usage first, or a JSON-serializable response envelope.
 
     timeout is the request timeout in seconds. None means no client timeout.
     """
-    if response_format not in ("text", "json"):
-        raise ValueError("response_format must be 'text' or 'json'")
-    if timeout is not None and timeout <= 0:
-        raise ValueError("timeout must be a positive number of seconds")
+    validate_options(response_format, timeout, temperature)
     contents = [
         prompt,
         *load_parts(list(files or []), include_file_name=include_file_name),
     ]
-    config = None
-    if system or timeout is not None:
-        config = types.GenerateContentConfig(
-            system_instruction=system or None,
-            http_options=(
-                types.HttpOptions(timeout=int(timeout * 1000))
-                if timeout is not None
-                else None
-            ),
-        )
+    config = types.GenerateContentConfig(
+        system_instruction=system or None,
+        temperature=temperature,
+        http_options=(
+            types.HttpOptions(timeout=int(timeout * 1000))
+            if timeout is not None
+            else None
+        ),
+    )
 
     try:
         response = get_client().models.generate_content(
@@ -81,23 +73,15 @@ def call(
 
     metadata = response.usage_metadata
     usage = TokenUsage(
-        prompt_token_count=getattr(metadata, "prompt_token_count", None),
-        candidates_token_count=getattr(metadata, "candidates_token_count", None),
-        total_token_count=getattr(metadata, "total_token_count", None),
-        thoughts_token_count=getattr(metadata, "thoughts_token_count", None),
-        cached_content_token_count=getattr(
-            metadata, "cached_content_token_count", None
+        total_tokens=getattr(metadata, "total_token_count", None),
+        request_tokens=sum_counts(
+            getattr(metadata, "prompt_token_count", None),
+            getattr(metadata, "tool_use_prompt_token_count", None),
         ),
-        tool_use_prompt_token_count=getattr(
-            metadata, "tool_use_prompt_token_count", None
+        # Thinking tokens are billed as output, so they count as response tokens.
+        response_tokens=sum_counts(
+            getattr(metadata, "candidates_token_count", None),
+            getattr(metadata, "thoughts_token_count", None),
         ),
     )
-    text = response.text or ""
-    if response_format == "json":
-        return CallResponse(response=text, usage=usage)
-
-    counts = ", ".join(
-        f"{name}={count if count is not None else 'unavailable'}"
-        for name, count in usage.items()
-    )
-    return f"Tokens: {counts}\n{text}"
+    return build_response(response.text or "", usage, response_format)

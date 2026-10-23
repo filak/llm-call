@@ -71,6 +71,7 @@ def test_cli_passes_arguments_to_call(monkeypatch, capsys):
         system=None,
         include_file_name=False,
         response_format="text",
+        temperature=0.0,
     )
 
 
@@ -96,6 +97,22 @@ def test_load_part_mismatched_extension_png(tmp_path):
     assert "inline_data" in result[0]
     assert result[0]["inline_data"]["mime_type"] == "image/png"
     assert result[0]["inline_data"]["data"] == b"this is plain text content"
+
+
+@pytest.mark.parametrize(
+    "name, mime_type",
+    [
+        ("a.png", "image/png"),
+        ("a.jpg", "image/jpeg"),
+        ("a.jpeg", "image/jpeg"),
+        ("a.JPEG", "image/jpeg"),
+        ("a.webp", "image/webp"),
+    ],
+)
+def test_load_part_image_mime_types(tmp_path, name, mime_type):
+    image = tmp_path / name
+    image.write_bytes(b"data")
+    assert load_part(str(image))[0]["inline_data"]["mime_type"] == mime_type
 
 
 @pytest.fixture
@@ -141,12 +158,9 @@ def test_call_json_preserves_usage_and_request(generate_content, monkeypatch):
     assert result == {
         "response": "Příliš žluťoučký\nresult",
         "usage": {
-            "prompt_token_count": 10,
-            "candidates_token_count": 20,
-            "total_token_count": 37,
-            "thoughts_token_count": 5,
-            "cached_content_token_count": 4,
-            "tool_use_prompt_token_count": 2,
+            "total_tokens": 37,
+            "request_tokens": 12,
+            "response_tokens": 25,
         },
     }
     assert json.loads(json.dumps(result)) == result
@@ -156,14 +170,13 @@ def test_call_json_preserves_usage_and_request(generate_content, monkeypatch):
     assert request["contents"] == ["hello", {"text": "attached"}]
     assert request["config"].system_instruction == "instruction"
     assert request["config"].response_mime_type is None
+    assert request["config"].temperature == 0.0
 
 
 def test_call_text_starts_with_usage(generate_content):
     result = client.call("hello")
     header, text = result.split("\n", 1)
-    assert header.startswith("Tokens: ")
-    assert "total_token_count=37" in header
-    assert "thoughts_token_count=5" in header
+    assert header == ("Tokens: total_tokens=37, request_tokens=12, response_tokens=25")
     assert text == "Příliš žluťoučký\nresult"
 
 
@@ -183,9 +196,10 @@ def test_call_handles_missing_usage_and_empty_text(generate_content, metadata):
     )
     result = client.call("hello", response_format="json")
     assert result["response"] == ""
-    assert result["usage"]["total_token_count"] == (0 if metadata else None)
-    assert result["usage"]["candidates_token_count"] is None
-    assert "candidates_token_count=unavailable" in client.call("hello")
+    assert result["usage"]["total_tokens"] == (0 if metadata else None)
+    assert result["usage"]["request_tokens"] == (0 if metadata else None)
+    assert result["usage"]["response_tokens"] is None
+    assert "response_tokens=unavailable" in client.call("hello")
 
 
 def test_call_rejects_invalid_format_before_request(generate_content):
@@ -213,14 +227,28 @@ def test_call_passes_timeout_in_milliseconds(generate_content):
     assert config.system_instruction is None
 
 
-def test_call_without_timeout_sends_no_config(generate_content):
+def test_call_without_timeout_sends_default_temperature(generate_content):
     client.call("hello")
-    assert generate_content.call_args.kwargs["config"] is None
+    config = generate_content.call_args.kwargs["config"]
+    assert config.temperature == 0.0
+    assert config.http_options is None
+
+
+def test_call_passes_temperature(generate_content):
+    client.call("hello", temperature=1.2)
+    assert generate_content.call_args.kwargs["config"].temperature == 1.2
 
 
 def test_call_rejects_invalid_timeout_before_request(generate_content):
     with pytest.raises(ValueError, match="timeout"):
         client.call("hello", timeout=0)
+    generate_content.assert_not_called()
+
+
+@pytest.mark.parametrize("temperature", [-0.1, 2.1, True, "0.5"])
+def test_call_rejects_invalid_temperature_before_request(generate_content, temperature):
+    with pytest.raises(ValueError, match="temperature"):
+        client.call("hello", temperature=temperature)
     generate_content.assert_not_called()
 
 
@@ -339,11 +367,11 @@ def test_html_response_round_trip(generate_content, tmp_path, response_format):
     if response_format == "json":
         decoded = json.loads(json.dumps(result))
         assert decoded["response"] == cleaned
-        assert decoded["usage"]["total_token_count"] == 37
+        assert decoded["usage"]["total_tokens"] == 37
     else:
         header, body = result.split("\n", 1)
         assert header.startswith("Tokens: ")
-        assert "total_token_count=37" in header
+        assert "total_tokens=37" in header
         assert body == cleaned
 
 
@@ -378,7 +406,7 @@ def test_cli_html_response_round_trip(
     if response_format == "json":
         result = json.loads(captured.out)
         assert result["response"] == cleaned
-        assert result["usage"]["total_token_count"] == 37
+        assert result["usage"]["total_tokens"] == 37
     else:
         header, body = captured.out.split("\n", 1)
         assert header.startswith("Tokens: ")
@@ -452,6 +480,7 @@ FULL_PAYLOAD = {
     "model": "payload-model",
     "files": ["input.html", "data/notes.txt"],
     "include_file_name": True,
+    "temperature": 0.7,
 }
 
 
@@ -465,6 +494,7 @@ def test_cli_payload_minimal(tmp_path, monkeypatch, mocked_cli_call):
         system="be brief",
         include_file_name=False,
         response_format="text",
+        temperature=0.0,
     )
 
 
@@ -480,6 +510,7 @@ def test_cli_payload_complete_unicode(tmp_path, monkeypatch, mocked_cli_call, bo
         system=FULL_PAYLOAD["system"],
         include_file_name=True,
         response_format="text",
+        temperature=0.7,
     )
 
 
@@ -492,6 +523,8 @@ def test_cli_payload_complete_unicode(tmp_path, monkeypatch, mocked_cli_call, bo
         (["--file", "a.txt"], "files", ["a.txt"]),
         (["--file", "a.txt", "--file", "b.png"], "files", ["a.txt", "b.png"]),
         (["--no-include-file-name"], "include_file_name", False),
+        (["--temperature", "1.5"], "temperature", 1.5),
+        (["--temperature", "0"], "temperature", 0.0),
     ],
 )
 def test_cli_console_overrides_payload(
@@ -533,6 +566,7 @@ def test_cli_without_payload_keeps_defaults(monkeypatch, mocked_cli_call):
         system=None,
         include_file_name=False,
         response_format="text",
+        temperature=0.0,
     )
 
 
@@ -571,9 +605,14 @@ def test_cli_requires_prompt_without_payload(monkeypatch, capsys, mocked_cli_cal
             "'include_file_name' must be true or false",
         ),
         (
-            {"prompt": "p", "system": "s", "temperature": 1, "extra": 2},
-            "unknown payload key(s): extra, temperature",
+            {"prompt": "p", "system": "s", "top_p": 1, "extra": 2},
+            "unknown payload key(s): extra, top_p",
         ),
+        ({"prompt": "p", "system": "s", "temperature": "0.5"}, "'temperature' must"),
+        ({"prompt": "p", "system": "s", "temperature": True}, "'temperature' must"),
+        ({"prompt": "p", "system": "s", "temperature": 2.5}, "'temperature' must"),
+        ({"prompt": "p", "system": "s", "temperature": -1}, "'temperature' must"),
+        ({"prompt": "p", "system": "s", "temperature": None}, "'temperature' must"),
     ],
 )
 def test_cli_invalid_payload_does_not_call_api(

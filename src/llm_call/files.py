@@ -1,11 +1,17 @@
 import json
-import mimetypes
 import pathlib
 from typing import Any, Dict, List
 
 TEXT_SUFFIXES = {".txt", ".html", ".htm"}
 JSON_SUFFIXES = {".json"}
-IMAGE_SUFFIXES = {".png", ".jpg", ".webp"}
+# Explicit map: mimetypes does not know .webp on some Windows hosts.
+IMAGE_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+IMAGE_SUFFIXES = set(IMAGE_MIME_TYPES)
 
 ALLOWED_SUFFIXES = TEXT_SUFFIXES | JSON_SUFFIXES | IMAGE_SUFFIXES
 
@@ -42,7 +48,6 @@ def load_part(path: str, include_file_name: bool = False) -> List[Dict[str, Any]
         return [{"text": content}]
 
     # Process Image files
-    mime_type, _ = mimetypes.guess_type(str(file_path))
     parts = []
 
     if include_file_name:
@@ -51,7 +56,7 @@ def load_part(path: str, include_file_name: bool = False) -> List[Dict[str, Any]
     parts.append(
         {
             "inline_data": {
-                "mime_type": mime_type or "application/octet-stream",
+                "mime_type": IMAGE_MIME_TYPES[suffix],
                 "data": file_path.read_bytes(),
             }
         }

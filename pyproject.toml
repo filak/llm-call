@@ -1,10 +1,11 @@
 [project]
 name = "llm-call"
-version = "0.6.0"
+version = "0.7.0"
 description = "A compact API wrapper and CLI for calling a LLM model provider."
 requires-python = ">=3.12"
 dependencies = [
     "google-genai>=0.8.0",
+    "httpx>=0.28",
 ]
 
 [dependency-groups]

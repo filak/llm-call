@@ -6,6 +6,7 @@ from typing import Any, Optional
 from .payload import PayloadError, load_payload
 from .providers import PROVIDERS
 from .providers.gemini.config import GEMINI_MODEL_DEF
+from .providers.openrouter.config import OPENROUTER_MODEL_DEF, OPENROUTER_MODELS
 
 
 def _pick(console: Optional[Any], payload: Optional[Any], default: Any) -> Any:
@@ -51,12 +52,22 @@ def main() -> int:
     parser.add_argument(
         "--model",
         default=None,
-        help=f"Model (default depends on provider; gemini: {GEMINI_MODEL_DEF})",
+        help=(
+            f"Model (default depends on provider; gemini: {GEMINI_MODEL_DEF}; "
+            f"openrouter: {OPENROUTER_MODEL_DEF}, "
+            f"supported: {', '.join(OPENROUTER_MODELS)})"
+        ),
     )
     parser.add_argument(
         "--system",
         default=None,
         help="System instruction",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="Sampling temperature 0.0-2.0 (default: 0.0)",
     )
     parser.add_argument(
         "--include-file-name",
@@ -106,6 +117,7 @@ def main() -> int:
                 args.include_file_name, payload.get("include_file_name"), False
             ),
             response_format=args.response_format,
+            temperature=_pick(args.temperature, payload.get("temperature"), 0.0),
         )
         if args.response_format == "json":
             text = json.dumps(result, ensure_ascii=False)

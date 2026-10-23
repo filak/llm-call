@@ -113,7 +113,6 @@ correlation identifier fields when available.
 - Format Python with Black.
 - Check Python with Flake8.
 - Use `pytest` for automated testing.
-- Use `pip-audit` for dependency vulnerability checks.
 - Add type annotations to new public functions.
 - Prefer `pathlib.Path` to `os.path`.
 - Use application factories where practical.

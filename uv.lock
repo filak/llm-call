@@ -558,10 +558,11 @@ wheels = [
 
 [[package]]
 name = "llm-call"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-genai" },
+    { name = "httpx" },
 ]
 
 [package.dev-dependencies]
@@ -573,7 +574,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "google-genai", specifier = ">=0.8.0" }]
+requires-dist = [
+    { name = "google-genai", specifier = ">=0.8.0" },
+    { name = "httpx", specifier = ">=0.28" },
+]
 
 [package.metadata.requires-dev]
 dev = [

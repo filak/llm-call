@@ -2,7 +2,16 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-ALLOWED_KEYS = {"prompt", "system", "model", "files", "include_file_name"}
+from .providers.response import is_valid_temperature
+
+ALLOWED_KEYS = {
+    "prompt",
+    "system",
+    "model",
+    "files",
+    "include_file_name",
+    "temperature",
+}
 REQUIRED_KEYS = ("prompt", "system")
 
 
@@ -57,4 +66,6 @@ def validate_payload(data: Any) -> Dict[str, Any]:
             )
     if "include_file_name" in data and type(data["include_file_name"]) is not bool:
         raise PayloadError("payload key 'include_file_name' must be true or false")
+    if "temperature" in data and not is_valid_temperature(data["temperature"]):
+        raise PayloadError("payload key 'temperature' must be a number from 0.0 to 2.0")
     return data
